@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "AirPlay Screen Caster",
+  "version": "2.0.0",
+  "description": "Casts your entire screen to a local AirPlay receiver.",
+  "permissions": [
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AirPlay Screen Caster"
+  },
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

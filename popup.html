@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AirPlay Screen Caster</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            width: 320px;
+            padding: 15px;
+            background-color: #f4f4f8;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+        }
+        label {
+            font-weight: 600;
+            color: #555;
+            display: block;
+            margin-top: 15px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 20px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #startStream { background-color: #007aff; }
+        #startStream:hover { background-color: #0056b3; }
+        #stopStream { background-color: #ff3b30; margin-top: 10px; }
+        #stopStream:hover { background-color: #c00; }
+        #status {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e9e9eb;
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #444;
+            min-height: 20px;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <h2>AirPlay Screen Caster</h2>
+
+    <label for="receiverIp">AirPlay Receiver IP:</label>
+    <input type="text" id="receiverIp" placeholder="e.g., 192.168.1.105">
+
+    <button id="startStream">Start Casting</button>
+    <button id="stopStream">Stop Casting</button>
+
+    <div id="status">Status: Idle</div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
