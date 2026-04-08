@@ -52,14 +52,6 @@ npm run backend:test
 npm run security:audit
 ```
 
-## Recruiter Evidence Map
-
-| Resume claim | Code evidence | How to verify |
-| --- | --- | --- |
-| Chrome extension + local backend + LAN receiver workflow | `popup.js`, `backend/src/server.js` (`/session/start`, `/session/stop`) | Start backend and trigger start/stop in extension |
-| Browser audio capture + WebSocket transport + ffmpeg transcode | `popup.js` (`tabCapture`, `MediaRecorder`, `WebSocket`), `backend/src/ffmpeg.js`, `backend/src/server.js` (`/stream/audio`) | Start stream and inspect generated HLS files |
-| Local HLS serving + playback initiation strategy for modern and legacy paths | `backend/src/server.js` (`/hls/...`), `backend/src/playback-adapter.js` | Request `/hls/live.m3u8`, inspect playback attempt logs |
-| Architectural limits and trade-offs documented | `ARCHITECTURE.md` | Review threat model and failure-mode section |
 
 ## Known Constraints
 
