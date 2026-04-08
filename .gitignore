@@ -3,3 +3,9 @@
 *.env
 .envrc
 .direnv/
+
+backend/node_modules/
+backend/runtime/
+backend/.coverage/
+*.log
+.DS_Store

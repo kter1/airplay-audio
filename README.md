@@ -1,21 +1,68 @@
 # AirPlay Audio Prototype
 
-Note: This is a personal prototype built for learning and demonstration purposes.
-
-## Overview
-
-This project is a Chrome extension prototype that explores a local workflow for sending
-browser audio toward AirPlay-compatible devices on a LAN.
+Local-first, security-hardened prototype for exploring browser-to-device audio streaming on a LAN.
 
 ## Status
 
-- Experimental prototype
+- Experimental and portfolio-focused
 - Not production-ready
-- Intended for portfolio demonstration and architecture discussion
+- Designed to make architecture decisions and failure modes explicit
 
-## Local Files
+## Implemented Flow
 
-- `manifest.json` — extension manifest
-- `popup.html` / `popup.js` — popup UI and actions
-- `background.js` — background bootstrap logic
+1. Chrome extension popup validates a private LAN receiver IP.
+2. Extension requests a local session from `POST /session/start`.
+3. Backend returns a per-session token and starts ffmpeg HLS output under a temp runtime directory.
+4. Extension captures current tab audio (`tabCapture`) and streams binary chunks over `WS /stream/audio`.
+5. Backend transcodes input to HLS (`live.m3u8` + `.ts` segments) and attempts playback initiation on the selected receiver.
 
+## Security Posture
+
+- Backend binds only to `127.0.0.1` (no LAN-exposed control plane).
+- Session-scoped nonce/token required for both stream ingress and stop operations.
+- Receiver input is validated to RFC1918 private IPv4 ranges only.
+- ffmpeg is executed via argument arrays (`spawn` with `shell: false`).
+- Runtime artifacts are confined to an isolated temp directory and deleted on teardown.
+- `.env` and env-like files are blocked from version control.
+
+## Quick Start
+
+```bash
+git clone https://github.com/kter1/airplay_audio.git
+cd airplay_audio
+npm ci --prefix backend
+npm run backend:start
+```
+
+Then in Chrome:
+
+1. Open `chrome://extensions`.
+2. Enable Developer mode.
+3. Load unpacked extension from this repository directory.
+4. In any tab, click the extension popup and start a stream.
+
+## Local Verification Commands
+
+```bash
+curl -s http://127.0.0.1:8090/health
+npm run check:tracked-env
+npm run scan:secrets
+npm run scan:policy
+npm run backend:test
+npm run security:audit
+```
+
+## Recruiter Evidence Map
+
+| Resume claim | Code evidence | How to verify |
+| --- | --- | --- |
+| Chrome extension + local backend + LAN receiver workflow | `popup.js`, `backend/src/server.js` (`/session/start`, `/session/stop`) | Start backend and trigger start/stop in extension |
+| Browser audio capture + WebSocket transport + ffmpeg transcode | `popup.js` (`tabCapture`, `MediaRecorder`, `WebSocket`), `backend/src/ffmpeg.js`, `backend/src/server.js` (`/stream/audio`) | Start stream and inspect generated HLS files |
+| Local HLS serving + playback initiation strategy for modern and legacy paths | `backend/src/server.js` (`/hls/...`), `backend/src/playback-adapter.js` | Request `/hls/live.m3u8`, inspect playback attempt logs |
+| Architectural limits and trade-offs documented | `ARCHITECTURE.md` | Review threat model and failure-mode section |
+
+## Known Constraints
+
+- AirPlay device behavior varies by firmware and protocol support.
+- Popup lifetime can interrupt streaming if Chrome closes the extension UI.
+- ffmpeg must be installed at an approved local path (`/opt/homebrew/bin/ffmpeg`, `/usr/local/bin/ffmpeg`, or `/usr/bin/ffmpeg`, or explicit `FFMPEG_PATH`).

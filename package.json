@@ -1,0 +1,15 @@
+{
+  "name": "airplay-audio-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "backend:start": "npm --prefix backend run start",
+    "backend:test": "npm --prefix backend test",
+    "check:tracked-env": "node scripts/check-tracked-env.mjs",
+    "scan:secrets": "node scripts/secret-scan.mjs",
+    "scan:policy": "node scripts/policy-check.mjs",
+    "security:audit": "npm --prefix backend audit --audit-level=high --omit=dev",
+    "ci:verify": "npm run check:tracked-env && npm run scan:secrets && npm run scan:policy && npm run backend:test && npm run security:audit"
+  }
+}

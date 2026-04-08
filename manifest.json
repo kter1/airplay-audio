@@ -1,10 +1,14 @@
 {
   "manifest_version": 3,
   "name": "AirPlay Screen Caster",
-  "version": "2.0.0",
-  "description": "Casts your entire screen to a local AirPlay receiver.",
+  "version": "2.1.0",
+  "description": "Streams browser tab audio to a hardened local backend for LAN playback experiments.",
   "permissions": [
-    "storage"
+    "storage",
+    "tabCapture"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8090/*"
   ],
   "background": {
     "service_worker": "background.js"

@@ -62,8 +62,12 @@
     <label for="receiverIp">AirPlay Receiver IP:</label>
     <input type="text" id="receiverIp" placeholder="e.g., 192.168.1.105">
 
-    <button id="startStream">Start Casting</button>
+    <button id="startStream">Start Local Stream</button>
     <button id="stopStream">Stop Casting</button>
+
+    <p style="font-size: 0.8em; color: #666; margin-top: 10px;">
+        Local-only prototype: backend must run on 127.0.0.1:8090.
+    </p>
 
     <div id="status">Status: Idle</div>
 
