@@ -1,76 +1,22 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>AirPlay Screen Caster</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            width: 320px;
-            padding: 15px;
-            background-color: #f4f4f8;
-        }
-        h2 {
-            text-align: center;
-            color: #333;
-            margin-top: 0;
-        }
-        label {
-            font-weight: 600;
-            color: #555;
-            display: block;
-            margin-top: 15px;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 8px;
-            margin-top: 5px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            box-sizing: border-box;
-        }
-        button {
-            width: 100%;
-            padding: 10px;
-            margin-top: 20px;
-            border: none;
-            border-radius: 5px;
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        #startStream { background-color: #007aff; }
-        #startStream:hover { background-color: #0056b3; }
-        #stopStream { background-color: #ff3b30; margin-top: 10px; }
-        #stopStream:hover { background-color: #c00; }
-        #status {
-            margin-top: 15px;
-            padding: 10px;
-            background-color: #e9e9eb;
-            border-radius: 5px;
-            font-size: 0.9em;
-            color: #444;
-            min-height: 20px;
-            word-wrap: break-word;
-        }
-    </style>
-</head>
-<body>
-    <h2>AirPlay Screen Caster</h2>
-
-    <label for="receiverIp">AirPlay Receiver IP:</label>
-    <input type="text" id="receiverIp" placeholder="e.g., 192.168.1.105">
-
-    <button id="startStream">Start Local Stream</button>
-    <button id="stopStream">Stop Casting</button>
-
-    <p style="font-size: 0.8em; color: #666; margin-top: 10px;">
-        Local-only prototype: backend must run on 127.0.0.1:8090.
-    </p>
-
-    <div id="status">Status: Idle</div>
-
-    <script src="popup.js"></script>
-</body>
-</html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chromebook AirPlay</title>
+<style>
+body{font:14px system-ui,sans-serif;width:320px;margin:0;padding:18px;background:#111827;color:#f9fafb;box-sizing:border-box}
+h1{font-size:18px;margin:0 0 8px}p{color:#cbd5e1;line-height:1.4}
+label{display:block;margin:14px 0 5px}input{width:100%;box-sizing:border-box;padding:10px;background:#1f2937;border:1px solid #4b5563;color:white;border-radius:6px}
+button{width:100%;padding:11px;margin-top:11px;border:0;border-radius:6px;font-weight:600;background:#60a5fa;color:#08111f;cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}#stop{background:#374151;color:white}#status{white-space:pre-wrap;word-wrap:break-word;font-size:12px;line-height:1.5;background:#1f2937;padding:12px;border-radius:6px;margin-top:12px}
+small{color:#9ca3af}
+</style></head><body>
+<h1>AirPlay Chromebook Caster</h1>
+<p>Experimental 720p full-screen capture for legacy Apple TVs. Linux sender required.</p>
+<label for="receiver">Apple TV local IP</label><input id="receiver" placeholder="192.168.1.25" autocomplete="off">
+<label for="pin">Pairing PIN (only if needed)</label><input id="pin" placeholder="Optional" autocomplete="off">
+<button id="start">Choose screen or tab & cast</button>
+<button id="stop">Stop casting</button>
+<div id="status" role="status">Checking local sender...</div>
+<small>Allow audio sharing in Chrome's screen picker. Some ChromeOS captures may have video only.</small>
+<script src="popup.js"></script></body></html>
