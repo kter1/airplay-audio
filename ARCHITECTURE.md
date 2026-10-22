@@ -1,38 +1,19 @@
-# Architecture and Security Notes
+# AirPlay mirroring architecture
 
-## Data Flow
+ChromeOS desktopCapture + offscreen getUserMedia -> WebM MediaRecorder -> localhost WebSocket -> ffplay -> private Xvfb display and PulseAudio null sink -> Doubletake sender -> Apple TV.
 
-```mermaid
-flowchart LR
-  UI["Chrome Extension Popup (UI Control)"] -->|"POST /session/start"| API["Local Backend API (127.0.0.1:8090)"]
-  UI -->|"WS /stream/audio (binary chunks)"| API
-  API -->|"stdin pipe (shell=false)"| FFMPEG["ffmpeg Transcode Process"]
-  FFMPEG -->|"HLS playlist + segments"| HLS["Local HLS Artifacts (temp runtime)"]
-  API -->|"GET /hls/live.m3u8"| UI
-  API -->|"Modern + Legacy playback attempts"| DEVICE["AirPlay Receiver on LAN"]
-```
+## Trust boundaries and behavior
+- Receiver IPv4 restricted to RFC1918 ranges; backend listens only on 127.0.0.1.
+- Session ID and token used to authenticate the audio/video WebSocket before binary frames are accepted.
+- One session at a time. Timeout: 90 seconds before media, 20 seconds idle after media.
+- WebSocket buffering bounded. Decoder backpressure pauses inbound socket.
+- Sender, decoder, Xvfb and PulseAudio sink are cleaned up on session stop.
+- Pairing may need separate interactive Doubletake setup.
+- No claim that sender-started state proves successful Apple TV playback.
 
-## Trust Boundaries
-
-- Trusted boundary: local extension process + loopback backend process.
-- Untrusted boundary: receiver IP input and LAN device responses.
-- Guardrails:
-  - API is loopback-only.
-  - Session-scoped token is required for stream ingress and stop.
-  - Receiver addresses are restricted to private IPv4 ranges.
-  - Runtime files are path-constrained to isolated temp folders.
-
-## Failure Modes and Trade-offs
-
-- Device protocol variance:
-  - Modern and legacy initiation endpoints are attempted.
-  - Failure is reported as best-effort (no guaranteed playback on every receiver).
-- Extension popup lifecycle:
-  - If popup closes, stream teardown is triggered.
-  - This keeps security posture tighter but can reduce stream continuity.
-- Local dependency:
-  - ffmpeg is mandatory for transcoding/HLS.
-  - Backend reports unavailability when ffmpeg is missing.
-- Network policy:
-  - Loopback-only control plane lowers exposure risk.
-  - Multi-host orchestration is intentionally out of scope for this prototype.
+## Hardware validation gates
+1. Doubletake synthetic -test works on actual target (especially Apple TV 2 / A1378).
+2. ChromeOS screen capture and audio tracks work in offscreen document.
+3. ffplay decodes WebM and Doubletake captures private virtual screen/audio.
+4. A/V sync and stability sustained for 30 minutes on the 4 GB Chromebook.
+5. Optimize re-encode overhead with direct sender input only after working prototype.
