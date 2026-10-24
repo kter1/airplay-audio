@@ -1,22 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chromebook AirPlay</title>
-<style>
-body{font:14px system-ui,sans-serif;width:320px;margin:0;padding:18px;background:#111827;color:#f9fafb;box-sizing:border-box}
-h1{font-size:18px;margin:0 0 8px}p{color:#cbd5e1;line-height:1.4}
-label{display:block;margin:14px 0 5px}input{width:100%;box-sizing:border-box;padding:10px;background:#1f2937;border:1px solid #4b5563;color:white;border-radius:6px}
-button{width:100%;padding:11px;margin-top:11px;border:0;border-radius:6px;font-weight:600;background:#60a5fa;color:#08111f;cursor:pointer}
-button:disabled{opacity:.5;cursor:wait}#stop{background:#374151;color:white}#status{white-space:pre-wrap;word-wrap:break-word;font-size:12px;line-height:1.5;background:#1f2937;padding:12px;border-radius:6px;margin-top:12px}
-small{color:#9ca3af}
-</style></head><body>
-<h1>AirPlay Chromebook Caster</h1>
-<p>Experimental 720p full-screen capture for legacy Apple TVs. Linux sender required.</p>
-<label for="receiver">Apple TV local IP</label><input id="receiver" placeholder="192.168.1.25" autocomplete="off">
-<label for="pin">Pairing PIN (only if needed)</label><input id="pin" placeholder="Optional" autocomplete="off">
-<button id="start">Choose screen or tab & cast</button>
-<button id="stop">Stop casting</button>
-<div id="status" role="status">Checking local sender...</div>
-<small>Allow audio sharing in Chrome's screen picker. Some ChromeOS captures may have video only.</small>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Chromebook AirPlay</title><style>
+body{width:290px;background:#111827;color:white;font:14px system-ui;margin:0;padding:20px;box-sizing:border-box}
+p{line-height:1.5;color:#d1d5db}button{background:#60a5fa;color:#111827;border:0;border-radius:6px;padding:12px;width:100%;font-weight:700;cursor:pointer}
+</style></head><body><h3>Chromebook AirPlay</h3>
+<p>Open the dedicated casting tab, then select your entire screen or a browser tab. Keep that tab open while casting.</p>
+<button id="open">Open casting controls</button>
 <script src="popup.js"></script></body></html>

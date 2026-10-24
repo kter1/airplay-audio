@@ -1,22 +1,18 @@
 {
   "manifest_version": 3,
   "name": "AirPlay Chromebook Caster",
-  "version": "3.0.0",
-  "description": "Experimental whole-screen and tab casting to legacy Apple TV through local Linux sender",
+  "version": "3.0.1",
+  "description": "Experimental desktop and tab casting from ChromeOS to Apple TV",
   "permissions": [
     "storage",
-    "desktopCapture",
-    "offscreen"
+    "desktopCapture"
   ],
   "host_permissions": [
     "http://127.0.0.1:8090/*"
   ],
-  "background": {
-    "service_worker": "background.js"
-  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Chromebook AirPlay"
+    "default_title": "Open Chromebook AirPlay Caster"
   },
   "icons": {
     "48": "icon48.png",
