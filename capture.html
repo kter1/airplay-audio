@@ -4,7 +4,7 @@
 <style>
 :root{color-scheme:dark}body{font:15px system-ui,sans-serif;background:#0b1220;color:#f9fafb;padding:32px;max-width:600px;margin:0 auto}
 h1{font-size:25px}p{color:#cbd5e1;line-height:1.5}label{display:block;font-weight:600;margin:20px 0 6px}
-input{padding:12px;background:#1e293b;color:#fff;border:1px solid #475569;border-radius:8px;width:100%;box-sizing:border-box}
+input,select{padding:12px;background:#1e293b;color:#fff;border:1px solid #475569;border-radius:8px;width:100%;box-sizing:border-box}
 button{padding:12px 16px;border:0;border-radius:8px;background:#60a5fa;color:#08111f;font-weight:700;cursor:pointer;margin:20px 8px 0 0}
 button:disabled{opacity:.45;cursor:wait}#stop{background:#334155;color:white}#status{background:#1e293b;color:#e2e8f0;border-radius:8px;padding:16px;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:20px;min-height:50px}
 small{color:#94a3b8}
@@ -13,6 +13,9 @@ small{color:#94a3b8}
 <p>This tab manages casting. Choose <b>Entire screen</b> for desktop mirroring or <b>Chrome tab</b> for tab casting. Do not close this tab during the session.</p>
 <label for="receiver">Apple TV local IP address</label><input id="receiver" spellcheck="false" placeholder="192.168.68.100">
 <label for="pin">Pairing code, only if required</label><input id="pin" autocomplete="off" placeholder="Leave blank when already paired">
+<label for="profile">Capture performance</label>
+<select id="profile"><option value="standard">Standard — 720p, 24 FPS</option><option value="fast">Fast — 540p, 20 FPS (lower CPU)</option></select>
+<p><small>Fast mode sacrifices sharpness and smoothness to reduce encoder load. Compare both at the same scene.</small></p>
 <button id="start">Choose screen & cast</button><button id="stop">Stop casting</button>
 <div id="status" role="status">Checking bridge...</div>
 <p><small>ChromeOS may not provide audio for every sharing surface. The local Linux backend and Doubletake must be running. Experimental A/V latency and CPU usage.</small></p>
