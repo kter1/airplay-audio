@@ -1,91 +1,141 @@
-# Subsecond ChromeOS → Apple TV AirPlay: Implementation Plan
+# AirPlay Subsecond Project — Optimized Execution Plan (v2)
 
-Status: **design only**, not a performance claim. Baseline observed on Apple TV A1469: approximately **6 s** initially, **3 s** after ffplay low-buffer mode; reducing ChromeOS capture to 540p/20 fps did **not** meaningfully change latency. Entire-screen video and audio work in current prototype. Existing path remains fallback.
+> **Status: engineering plan, not a shipping implementation.** Current Chromebook → Apple TV A1469 full-screen+audio path works. Observed latency: ~6 s original, ~3 s after FFplay low-buffering, and still ~3 s with 540p/20-fps Fast mode. These are user's estimates, not controlled p95 measurements. Direct Doubletake baseline result has **not** been reported. Keep the working branch and settings available throughout.
+>
+> **Key decision:** Do not build both a browser H.264 encoder **and** a custom AirPlay adapter before demonstrating that the A1469 can play externally encoded H.264 at low latency. **Receiver baseline → synthetic direct encoded sender → Chrome codec capability → integration → audio**.
 
-## Goal and non-goals
+## 1. Product outcome and priorities
 
-- Primary: **action-to-photon video latency <1.0 s at p95**, sustained for ten minutes on the user's 4 GB Chromebook + A1469, with no visible drift or growing buffered backlog. Measure after warm-up under realistic motion.
-- Stretch: <0.5 s p95 if receiver is capable. This is **not guaranteed**, particularly on an older Apple TV.
-- Audio: intelligible, stable, not staticky; maintain perceptual lip sync to video. First milestone is video-only so audio does not confound latency.
-- Quality after latency: 720p/24 fps first; 1080p/30 fps only after timing and thermal/CPU stability pass.
-- Preserve local-only networking, explicit user capture selection, no persisted screenshots/recordings, controlled memory, authenticated connection and clean stop/reconnect.
-- Do not turn experimental changes on by default or remove the legacy FFplay/Xvfb/Doubletake profile until the new mode is proven.
+**Primary acceptance condition:** 720p at 24 fps, full Chromebook desktop, audio enabled, **input/action-to-TV-photon latency <1,000 ms p95** across a 10-minute representative session, no accumulating lag, stable A/V sync, and no persistent memory growth on the actual 4 GB Chromebook + Apple TV A1469.
 
-## Current architecture and why it is expensive
+- **P0:** subsecond interactive video, correctness, recovery, A/V sync.
+- **P1:** sustained 720p legibility/24 fps, stable CPU and RAM, security.
+- **P2:** 1080p/30 fps after 720p meets P0+P1 (A1469's advertised 1080p output does not guarantee every AirPlay mirroring mode negotiates that resolution).
+- Optional stretch: 500 ms p95; **no guarantee** for the 2013 receiver.
+- Rollback: existing MediaRecorder/FFplay/Xvfb/Doubletake path must remain usable. New feature only enabled by explicit Experimental Direct mode.
 
-`chrome.desktopCapture` → MediaStream → browser MediaRecorder (WebM/VP8+Opus) → localhost authenticated WebSocket → Node Fastify → FFplay WebM decode → Xvfb virtual display + isolated PulseAudio sink → Doubletake X11 capture → H.264/x264 re-encode → encrypted AirPlay mirroring → A1469.
+### Why the previous plan was reordered
 
-This involves codec conversion, a playback clock, resampling and a second screen capture. FFplay's earlier buffer reductions cut observed delay by ~3 seconds; lowering capture rate/resolution did not. It is **not yet proven** which of remaining stages dominates.
+The existing stream incurs `MediaRecorder VP8/Opus WebM → WebSocket → FFplay decode/render → Xvfb/PulseAudio → Doubletake X11 capture → software H.264 re-encode → AirPlay`. A 540p capture optimization did not reduce end-to-end delay; reducing FFplay buffering did. This suggests a structural/video clock bottleneck, **but does not prove whether the remaining 3 seconds are at the receiver**. A major rewrite before benchmarking that baseline is premature.
 
-## Milestone 0 — Instrument and decide whether direct AirPlay can meet the goal
+### Planned architecture (not yet implemented)
 
-1. Run `scripts/latency-baseline.sh <receiver-ip>` after `sudo apt install x11-apps`; it displays a digital X11 clock passed directly to Doubletake, without Chrome capture, Node, WebSocket, MediaRecorder or FFplay. Compare to local `date +%T` in a second terminal.
-2. This once-per-second clock is enough to distinguish multi-second receiver lag, but **not** to establish precise subsecond latency. Film both local source and TV with one high-frame-rate smartphone camera or perform a shared visible stimulus/photo measurement.
-3. Obtain video-only and video+audio baselines. Check whether lag grows with session age. Record sender stderr, local CPU and memory (`top`, `free -m`) and network conditions.
-4. Gate: if *direct* Doubletake is already at or above 1 s, debug AirPlay timestamps/receiver playback and test receiver/version alternatives **before** rewriting browser media transport. The `-target-latency-ms` option adjusts scheduling lead, not arbitrary multi-second queue buildup; do not use it blindly.
+`ChromeOS desktopCapture → VideoFrame → one WebCodecs H.264 encoder (low latency) → authenticated bounded AU transport over localhost → adapted Doubletake Go sender (reuse clock mapping, encryption, RTP/AirPlay setup) → A1469`.
 
-## Milestone 1 — Browser H.264 feasibility spike (no AirPlay change)
+Keep audio as separate timestamped stream; **do not** add FFplay back into the video path. Existing Node control API can remain in front of the Go sender unless benchmarks show material overhead.
 
-1. Add a **separate experimental capture mode** in the persistent MV3 extension tab (keep the current MediaRecorder choice).
-2. Preserve `desktopCapture.chooseDesktopMedia` consent and obtain the media video track. Probe `VideoEncoder.isConfigSupported` at 1280×720, 24/30 fps with `avc: {format: "annexb"}`, `latencyMode: "realtime"`, `hardwareAcceleration: "prefer-hardware"`, H.264-compatible profile strings. Try a conservative profile/size when unsupported; do **not** presume all ChromeOS devices support accelerated H.264.
-3. Feed VideoFrame objects from a track processor in a supported worker when available; fall back to a video-element/requestVideoFrameCallback path without excessive canvas copies. Close consumed VideoFrames promptly.
-4. Generate complete H.264 access units (SPS/PPS, IDR/non-IDR). Request a keyframe at startup, on connection repair, and periodically (~1–2 s) without B-frames/reordering. Avoid queue growth: cap `VideoEncoder.encodeQueueSize`, drop **raw** frames when late, and reset/request keyframe on unrecoverable *encoded* stream discontinuity.
-5. Expose actual encoder capability/encode duration/frame interval stats in UI. Gate: sustained correctly decodable H.264 output, no unbounded encode queue or RAM increase.
+## 2. Latency measurement protocol and budget
 
-## Milestone 2 — Native direct-H.264 AirPlay sender
+**Tools:**
+1. Existing `scripts/latency-baseline.sh TV_IP` creates an Xvfb xclock and sends it directly to Doubletake. This excludes ChromeOS screen capture, MediaRecorder, WebSocket, Node and FFplay. Run with audio disabled. Compare to live `date +%T` on Chromebook/Linux. **The one-second clock only distinguishes ~1 s vs ~3 s; it cannot certify <1 s.**
+2. For quantitative subsecond verification: put source screen/controlled visual marker and TV in one camera recording (ideally 120/240 fps); use a rapid, timestamped visible state change or random frame ID, and calculate frame-count delay. Use repeated trials, **not just a single screenshot**.
+3. Record **p50, p95, max** (≥100 independent actions) at start and after 10 minutes. Record dropped/duplicated frames, FPS, A/V delay and any drift. Repeat on a stable local Wi-Fi environment; note receiver connection and Chromebook CPU/swap.
 
-**Preferred approach: small, pinned, separately licensed Doubletake fork/extension, not a rewrite of pairing/encryption.** Upstream is LGPL-3.0; respect licensing and retain attribution/source availability for redistributed modifications.
+**Engineering budget to test, not asserted measurements**:
+- Chrome capture + H.264 encode: target ≤150 ms at p95.
+- ChromeOS → Linux transport + native bridge: target ≤75 ms at p95.
+- Doubletake frame scheduling/packetization: target ≤75 ms at p95.
+- A1469 network/decoding/display: remaining ~600 ms plus 100 ms safety margin. **Reallocate only after measuring it**.
+- Stage-specific p95 figures cannot simply be summed to prove overall p95; validate end-to-end with camera measurements.
 
-Upstream primitives already exist:
-- `internal/airplay.VideoAccessUnit` (Annex-B AU with `PTS time.Time`).
-- `MirrorSession.StreamFrames(ctx, capture, ...)` parses H.264 SPS/PPS, encrypts VCL access units, maps PTS onto negotiated receiver clock and transmits frames.
-- `ScreenCapture` is currently bound to GStreamer/X11 and has a private `videoAccessUnitReader`. `BroadcastSink.AsCapture()` demonstrates that a synthetic in-process source can drive `StreamFrames`.
+**Clock validity:** WebCodecs VideoFrame/EncodedVideoChunk timestamps are microseconds in a media timeline, **not necessarily Unix wall time or Crostini monotonic time**. Capture per-session timebase metadata; align relative timestamps at sender ingress using monotonic mapping. Allow for ChromeOS/Crostini clock domain differences and detect discontinuities. Do not assume arbitrary microsecond timestamps are already safe AirPlay presentation times.
 
-Implement a documented **external encoded-access-unit adapter** in the Doubletake-based sender that accepts H.264 AUs from stdin/Unix socket and presents them to StreamFrames with valid, monotonic, receiver-clock-mapped PTS. Negotiate receiver size/codec and pairing exactly once; do not introduce arbitrary extra playout lead or reconstruct frame clock from ffplay.
+## 3. Gate A — Receiver path first (no production app modification)
 
-Transport: retain the local loopback Fastify auth/session handshake; use strict versioned, length-bounded frame packets with `sequence`, `captureTimestampUs`, `keyframe`, and AU bytes. Node forwards to the Go sender over a bounded local socket/pipe (or merge transport directly into the Go sender after authorization); **do not** decode/re-encode video. Calculate timestamp offset via clock sync at session start; ChromeOS and Crostini may have different monotonic epochs. Guard timestamp drift/reordering and use arrival-time mapping only as a documented fallback.
+Run the existing direct X11 clock test, then assess video-only and video+audio where practical.
 
-Gate: display browser-generated test pattern on Apple TV using direct H.264; log received AU / sent AU timing and receiver behavior, comparing with Milestone 0. No full desktop yet.
-
-## Milestone 3 — Real desktop video and profile selection
-
-Integrate browser screen VideoEncoder output with the native AirPlay adapter. Record:
-- capture frame time, encoder output time, browser WS enqueue and drain;
-- Node receive time, native sender AU transmit time;
-- external action-to-photon measurement at TV.
-
-Profile targets:
-- **Low latency**: 720p/24 fps and a controlled bitrate that hardware can sustain;
-- **Quality**: 1080p/30 fps only if WebCodecs H.264 and the A1469 AirPlay negotiation actually accept the profile without latency regression;
-- **Legacy fallback**: the proven WebM → FFplay → Xvfb → Doubletake path.
-
-Use measured p50, p95 and max over ten minutes. Ensure memory and backpressure are bounded; never let a WebSocket/encoder queue silently accumulate seconds of content.
-
-Gate: <1 s p95 with stable 720p video, no audio.
-
-## Milestone 4 — Audio and A/V sync
-
-Capture tab/system audio only when offered by ChromeOS and explicitly selected. Do not assume global system audio is available for every surface. Build a parallel timestamped audio path (AudioWorklet PCM chunks or supported equivalent) into Doubletake's existing screen-audio sender. Existing PulseAudio null-sink may be kept temporarily as an **audio-only** bridge if supported; do not reinstate the video FFplay stage.
-
-Map audio and video to one session clock with independently bounded queues, and profile source of staticky sound. Check audio underflow, clipping, timing resampling and whether the synthetic audio test itself distorts. Gate: stable intelligible audio, acceptable lip-sync, no renewed multi-second video buffering.
-
-## Milestone 5 — Hardening, security, release
-
-- Unit tests: Annex-B SPS/PPS/IDR parsing, packet length limits, monotonically mapped PTS, capability negotiation, session restart, timeout, keyframe recovery, bounded backpressure; hardware-free simulated receiver test.
-- End-to-end A1469 soak test (10 minutes minimum), inspect CPU, memory and ChromeOS capture stability.
-- Repair failing GitHub security gate: pinned Fastify dependency plus transitive `fast-uri`, `find-my-way`, `ws`. Run `npm audit`, all tests, no blind `--force` without review.
-- Preserve existing branch as rollback; experimental mode default-off until hardware validation passes. Keep binary/source license compliance for any fork.
-
-## Go/no-go decisions
-
-| Observation | Action |
+| Direct path | Decision |
 | --- | --- |
-| Direct X11 Doubletake <1 s, bridge ~3 s | Proceed with WebCodecs + direct native AUs |
-| Direct Doubletake ~3 s | Investigate receiver/Doubletake timing and alternative receiver before pipeline rewrite |
-| WebCodecs H.264 unavailable or too slow on 4 GB machine | Benchmark GStreamer or WebRTC H.264 encoder path with one encode; preserve fallback |
-| Direct video <1 s but audio restores >1 s | Isolate audio clock and buffering; keep video-only preview usable |
-| 720p passes but 1080p does not | Ship 720p low-latency; prioritize responsiveness |
+| **<1 s** measured accurately | Focus on elimination of the FFplay/video recapture chain. |
+| **1–2 s** | Investigate Doubletake transport/timestamps + A1469 receiver buffer before building entire Chrome pipeline. |
+| **~3 s** | Halt major media rewrite. Profile Doubletake timing and the receiver, and benchmark an available newer Apple TV before assuming the app is the bottleneck. |
 
-## Immediate next action
+Check `-target-latency-ms` only with controlled A/B tests; upstream defaults are small scheduling leads, **not direct control of a receiver's multi-second queue**. A single coarse xclock comparison is indicative, not proof of any threshold.
 
-**Run and report the direct wall-clock test** that is already committed. This is the highest-value decision gate before investing in a direct media sender. Implement Milestone 1 capability probe as an isolated opt-in next, not as a replacement for the working extension.
+**Deliverable:** short baseline log with screenshots/video evidence, estimated median/p95, CPU/RAM and identified current bottleneck. **Go/no-go required.**
+
+## 4. Gate B — Prove Direct Doubletake can play externally encoded H.264
+
+**Move this stage ahead of full browser WebCodecs implementation.** Fork/adapt the Doubletake Go sender in an isolated experimental module. Preserve attribution and LGPL-3.0 obligations when distributing modified builds. Pin the upstream revision (not an unpinned `main`).
+
+Source interfaces verified in Doubletake:
+- `internal/airplay.VideoAccessUnit{AnnexB, PTS}`.
+- `MirrorSession.StreamFrames(ctx, capture, ...)`, which handles SPS/PPS, IDR, encryption and AirPlay framing, mapping PTS to negotiated clock.
+- `ScreenCapture` has a private access-unit reader; `BroadcastSink.AsCapture()` illustrates wrapping a non-GStreamer reader into the existing streamer.
+
+**Minimal native prototype:** add a narrow exported constructor/adapter inside `internal/airplay` for an externally supplied, bounded **H.264 Annex-B access-unit reader** with explicit PTS. Wire it into the existing session setup/streaming without invoking any X11 capture, FFplay or second encoder.
+
+**First feed:** independently generate a known H.264 test pattern with GStreamer/x264 as **the only encoder** and stream it through the adapter to A1469. This is intentionally independent of Chrome, WebCodecs and our Node bridge. Check SPS/PPS (codec configuration), IDR startup, frame size, monotonic time, exact display dimensions and reconnect.
+
+**Failure handling:** a single UDP/TCP stall cannot add unbounded encoded-frame delay. Do not randomly discard interdependent H.264 P-frames; drop stale **raw frames before encoding**, and if encoded continuity breaks, re-prime with IDR/SPS/PPS after bounded recovery. Abort/resume if the sender cannot catch up.
+
+**Go/no-go:** externally encoded **video-only** pattern renders reliably and its latency approaches the direct X11 Doubletake baseline, with correct timestamps and no seconds-long buffering.
+
+## 5. Gate C — ChromeOS H.264 capability spike (parallel to or after B)
+
+Before building new UI, probe the **actual Chromebook Chrome version and hardware**, not theoretical Chrome support:
+
+1. Preserve `chrome.desktopCapture.chooseDesktopMedia` user selection and persistent extension tab.
+2. Check `VideoEncoder` and `VideoEncoder.isConfigSupported`; probe appropriate `avc1` H.264 profiles at 720p/24 fps, `latencyMode: "realtime"`, `avc: { format: "annexb" }`, and hardware preference. `hardwareAcceleration: "prefer-hardware"` is **a hint**, not proof of hardware encoding or speed. Fall back to `no-preference` and narrower profile, then consider native GStreamer if needed.
+3. Test `MediaStreamTrackProcessor` worker availability; feature-detect because exposure differs between browser contexts. Use a fallback capture bridge only when justified by performance.
+4. Encode and locally validate complete video access units with IDR/SPS/PPS and no problematic frame reordering. Force a keyframe on start/reconnect and after discontinuities; inspect actual output instead of assuming the requested profile is honored.
+5. Bound `encodeQueueSize` and close input `VideoFrame` objects. A slow encoder should reduce/dismiss **pre-encode raw frames**, not accumulate seconds of frames. Benchmark encoding under desktop motion for at least two minutes.
+6. Report encoder p50/p95, frame drops, sustained FPS, browser memory, CPU and swap. Avoid reliance on a bare `MediaRecorder.start(200)` timeslice as a meaningful low-latency guarantee.
+
+**Go/no-go:** stable 720p/24 fps Annex-B H.264, bounded queues, quality acceptable, and no significant memory growth on the actual 4 GB Chromebook. Fallback to a separately benchmarked native encoder **only if WebCodecs fails the gate**.
+
+## 6. Gate D — Integrate direct media transport without recoding
+
+**Local boundary:** use the existing authenticated localhost startup/session. Version frame packets and strictly validate size, sequence, codec/profile, dimensions, keyframe flags and PTS. Node can forward bytes unmodified to Go initially; remove Node from the data path **only if measured as a material latency contributor**.
+
+**Backpressure:** use time/frames (e.g. 2–3 video frames or approximately 100–150 ms under nominal cadence), not just an arbitrary several-megabyte WebSocket threshold. When congested, stop feeding new raw frames, request a new IDR if coded continuity is compromised, and fail/recover rather than retaining stale media.
+
+**Instrumentation:** browser capture time, encode complete time, enqueue/dequeue time, Node receive, Go ingress and AirPlay write time (compare only times after mapping clock domains); receiver measured externally. Include `queueDelayMs`, `senderAgeMs`, `droppedRawFrames`, `codecRestarts`, `lastKeyframeAgeMs`, CPU/swap, socket buffered bytes and baseline comparison.
+
+**Profiles:** `Legacy` (unchanged), `Direct 720p / 24 fps` (experimental, target), optional `Direct 1080p / 30 fps` (future, capability-gated). Legacy fallback should take one click after stopping current session; no automatic hidden toggles.
+
+**Go/no-go:** p95 end-to-end **<1,000 ms** for video-only, sustained ten minutes, no growing delay, no unbounded buffers. If latency remains high, use stage timing to distinguish browser encoder, Go sender and A1469. **Do not move to 1080p until this passes.**
+
+## 7. Gate E — Audio without reintroducing video latency
+
+- Use the audio track ChromeOS actually grants. Not all desktop/window captures include system audio; show `audio unavailable` honestly.
+- Start by transporting timed raw PCM chunks from AudioWorklet when supported. Map them to the same session timeline as video; avoid large audio aggregation windows.
+- Reuse Doubletake's existing sender audio implementation. If needed, retain isolated PulseAudio as an **audio-only** interop stage, not FFplay for video.
+- Diagnose crackling independently: synthetic receiver test versus browser audio; measure audio underrun, clipping, sample-rate/channel mismatch and clock drift.
+- Re-measure video p95 with audio enabled. Optimize synchronization without imposing a multi-second video buffer.
+
+**Go/no-go:** synchronized, intelligible audio and stable video p95 <1,000 ms, with no worsening lag or audio drift over ten minutes.
+
+## 8. Security, QA and licensing (parallel blockers)
+
+- Existing GitHub Actions audit currently reports high-severity vulnerabilities for `fastify`, `fast-uri`, `find-my-way`, and `ws`. **Fix dependencies and committed lockfile before widening any access or treating experimental code as release-ready**; test upgrades instead of running blind `npm audit fix --force`.
+- Keep backend bound to `127.0.0.1`, reject unauthorized origins when appropriate, authenticate each media session, enforce packet bounds and timeouts; do not expose a listening port on the Wi-Fi interface.
+- Unit/fuzz/property test Annex-B parser boundaries, frame length, timestamps/overflow, session expiry, IDR and SPS/PPS resets, source shutdown, unexpected WebSocket disconnect, pairing and cleanup.
+- A1469 hardware soak (ten-minute minimum), record performance metrics before/after each architecture change. Leave baseline version recoverable.
+- If modifying/redistributing Doubletake, document license notices, copyright, modification scope and corresponding-source obligations; upstream is LGPL-3.0.
+
+## 9. Scope control and stop conditions
+
+**Do not build now:** new AirPlay encryption from scratch, a WebRTC signaling server, multi-receiver casting, a native ChromeOS app, 1080p quality-first mode, an elaborate telemetry backend, DRM bypass, or speculative hardware purchasing.
+
+Stop direct-H.264 work if: the direct sender itself has a receiver-imposed >1-second floor that cannot be improved in controlled tests; WebCodecs/native fallback cannot sustainably encode at useful speed on the 4 GB machine; or a prototype repeatedly breaks pairing or receiver playback with no measurable gain.
+
+If hardware limits are confirmed, preserve the 3-second implementation for passive viewing, or evaluate a receiver better suited to low-latency input before committing to larger engineering costs.
+
+## 10. Practical next action on the Chromebook
+
+1. Stop the cast and Node server; install `x11-apps` if necessary.
+2. `cd ~/apps/airplay-audio && git pull --ff-only && export PATH="$HOME/.local/bin:$PATH"`.
+3. `read -rp "Apple TV IP: " TV_IP; bash scripts/latency-baseline.sh "$TV_IP"`.
+4. Open another Linux terminal: `watch -n 0.2 'date +%T'`.
+5. Report direct sender delay; if under 1 s, proceed to Gate B synthetic encoded-video adapter. For subsecond proof, use shared-camera frame analysis instead of 1 Hz xclock.
+
+## References
+
+- Current project branch: https://github.com/kter1/airplay-audio/tree/codex/chromeos-full-airplay-cast
+- Doubletake: https://github.com/omarroth/doubletake
+- Doubletake encoded unit: https://github.com/omarroth/doubletake/blob/main/internal/airplay/capture_frame.go
+- Doubletake AirPlay StreamFrames: https://github.com/omarroth/doubletake/blob/main/internal/airplay/mirror.go
+- WebCodecs AVC Annex-B registration: https://www.w3.org/TR/webcodecs-avc-codec-registration/
+- WebCodecs VideoEncoder configuration and latency mode: https://www.w3.org/TR/webcodecs/
+- MediaStreamTrackProcessor availability: https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamTrackProcessor
