@@ -65,3 +65,19 @@ npm run ci:verify
 This **does not yet establish** full Chromebook screen mirroring. ChromeOS may not expose system audio for all surfaces. The double decode/re-encode bridge is CPU-intensive for a 4 GB Chromebook, and pairing, sync, and FPS still require live testing. Keep the extension control tab open. The Node backend stays bound to loopback and accepts only a single stream. Protected content might not be capturable. Use on a trusted machine/network only.
 
 Older audio-only HLS code remains in `backend/src/server.js` for reference. The historical dependency lockfile may fail `npm audit`; remediate vulnerabilities before treating the prototype as production-ready.
+
+## Low-latency experiment (after confirming live A/V)
+
+As of the low-buffering patch, the bridge starts ffplay with reduced demux/probe buffering, external-clock sync, and frame dropping. This attempts to reduce the multi-second default playback lag. It **cannot eliminate** the intrinsic extra encode/decode stage or older Apple TV AirPlay buffering.
+
+A/B test the same screen motion with both profiles:
+
+```bash
+# Default: low latency
+npm run backend:start
+
+# If audio glitches, frames fail, or latency gets worse, stop the server and run:
+AIRPLAY_LOW_LATENCY=0 npm run backend:start
+```
+
+Stop casting before restarting the backend. Restart an active cast after changing profile. Report measured seconds of delay, picture smoothness, and audio clarity for each profile. Benchmark the display by opening a clock with seconds on the Chromebook and photographing both screens; test 30+ seconds into the session to distinguish startup delay from accumulating buffering.
