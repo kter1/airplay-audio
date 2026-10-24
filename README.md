@@ -81,3 +81,10 @@ AIRPLAY_LOW_LATENCY=0 npm run backend:start
 ```
 
 Stop casting before restarting the backend. Restart an active cast after changing profile. Report measured seconds of delay, picture smoothness, and audio clarity for each profile. Benchmark the display by opening a clock with seconds on the Chromebook and photographing both screens; test 30+ seconds into the session to distinguish startup delay from accumulating buffering.
+
+
+## Performance A/B test (October 2026)
+
+Actual A1469 casting was confirmed to work from ChromeOS, with initial approximately six-second delay and roughly three seconds after reduced ffplay buffering. The latency measurements are user observations, not controlled benchmarks.
+
+The capture page now offers **Standard (720p/24fps/2.3Mbps)** or **Fast (540p/20fps/1.25Mbps)**. Fast only reduces browser capture encoding load; the virtual Linux display remains 1280x720 and Doubletake continues re-encoding. This may **not** reduce latency if the AirPlay receiver or player buffering dominates. Compare the same clock/mouse movement after 30 seconds in each mode. Log any sound distortion, stalls, or latency drift. A genuine subsecond redesign would need direct encoded media ingestion into the AirPlay sender, removing ffplay and the Xvfb re-encode stage.
