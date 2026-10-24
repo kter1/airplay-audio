@@ -27,6 +27,21 @@ export function buildSenderArgs(receiverIp, { pairing = false, fps = 24, bitrate
   return args;
 }
 
+// The default ffplay demuxer may prebuffer live WebM received over stdin.
+// Keep the original flags available for A/B testing (AIRPLAY_LOW_LATENCY=0).
+export function buildPlayerArgs({ lowLatency = true } = {}) {
+  const args = ["-loglevel", "error", "-nostats", "-noborder", "-fs"];
+  if (lowLatency) args.push(
+    "-fflags", "nobuffer",
+    "-flags", "low_delay",
+    "-probesize", "32768",
+    "-analyzeduration", "100000",
+    "-framedrop",
+    "-sync", "ext"
+  );
+  return [...args, "-f", "matroska", "-i", "pipe:0"];
+}
+
 export function validPin(value) {
   return value === "" || (typeof value === "string" && /^[0-9A-Za-z]{4,12}$/.test(value));
 }
@@ -148,8 +163,10 @@ export class MirrorEngine {
 
       // One continuous WebM byte stream; the MediaRecorder initialization data occurs
       // in its first blob. ffplay renders into the private Xvfb display and audio sink.
-      this.player = this.launch(check.found.ffplay, ["-loglevel", "error", "-nostats",
-        "-noborder", "-fs", "-f", "matroska", "-i", "pipe:0"], playerEnv, { input: "pipe" });
+      const lowLatency = process.env.AIRPLAY_LOW_LATENCY !== "0";
+      this.note("latency", lowLatency ? "ffplay low-buffering profile" : "ffplay legacy profile");
+      this.player = this.launch(check.found.ffplay, buildPlayerArgs({ lowLatency }),
+        playerEnv, { input: "pipe" });
       this.sender = this.launch(check.found.doubletake,
         buildSenderArgs(this.receiverIp, { pairing: Boolean(this.pairingCode) }),
         senderEnv);
