@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs";
-import { buildSenderArgs, validPin } from "../src/mirror-engine.js";
+import { buildSenderArgs, buildPlayerArgs, validPin } from "../src/mirror-engine.js";
 
 test("sender uses H.264 and controlled bitrate", () => {
   const args=buildSenderArgs("192.168.1.25");
@@ -26,4 +26,17 @@ test("desktop capture uses real persistent extension tab", () => {
   assert.ok(capture.includes("chrome.desktopCapture.chooseDesktopMedia"));
   assert.ok(capture.includes("navigator.mediaDevices.getUserMedia"));
   assert.ok(capture.includes('new URL("/mirror/stream",BASE)'));
+});
+
+test("low-latency player keeps container format and minimizes buffering", () => {
+  const args = buildPlayerArgs();
+  assert.ok(args.includes("nobuffer"));
+  assert.ok(args.includes("low_delay"));
+  assert.ok(args.includes("-framedrop"));
+  assert.deepEqual(args.slice(-4), ["-f", "matroska", "-i", "pipe:0"]);
+});
+test("legacy player can be restored for comparison", () => {
+  const args = buildPlayerArgs({lowLatency:false});
+  assert.ok(!args.includes("nobuffer"));
+  assert.ok(!args.includes("low_delay"));
 });
