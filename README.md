@@ -1,62 +1,67 @@
-# AirPlay Chromebook Caster
+# Chromebook to Apple TV — experimental full-screen mirroring
 
-**Experimental — actual Apple TV playback has not been verified.**
+**Tested receiver path:** Doubletake v0.5.0 was successfully used from Chromebook Linux to show its synthetic video pattern with audible audio on an Apple TV A1469 (AppleTV3,2) on October 23, 2026. **The ChromeOS extension-to-receiver path is still unverified.**
 
-This branch adds whole-screen or tab **video plus optional audio** capture from ChromeOS Chrome to a Linux AirPlay mirroring sender. It targets a likely Apple TV 2nd generation (A1378, 720p), but Doubletake has not been confirmed to support that receiver.
+## Design
 
-## Architecture
+A persistent visible Chrome extension tab (capture.html) runs the desktop capture chooser and getUserMedia **in the same extension context**, then streams MediaRecorder WebM to the local Node bridge over an authenticated WebSocket. The backend decodes with ffplay to an isolated Xvfb display and PulseAudio null sink; Doubletake captures the virtual Linux display and sink and attempts AirPlay H.264/audio mirroring.
 
-ChromeOS extension desktopCapture -> MV3 offscreen document -> MediaRecorder WebM -> authenticated localhost WebSocket -> ffplay -> virtual X11 display and isolated PulseAudio null sink -> Doubletake H.264 mirroring -> Apple TV.
+Use a visible extension tab instead of an MV3 offscreen document: Chrome's desktopCapture chooser stream IDs are not reliably consumable from offscreen pages. Keep the casting tab open; you can switch to other windows and tabs while streaming.
 
-This deliberately avoids trying to run the Linux sender as a Chrome extension. It is CPU intensive, and not a low-latency native AirPlay implementation.
+## Prerequisites (Chromebook Linux/Crostini)
 
-## Chromebook Linux requirements
+- Node.js >=22
+- Doubletake (binary named `doubletake` must be in PATH)
+- ffplay/ffmpeg, Xvfb, pulseaudio-utils, GStreamer x11 and encoders
+- Apple TV on the same trusted home LAN
 
-Node.js 22+, ffplay (from ffmpeg), Xvfb, PulseAudio utilities, GStreamer capture and encoder plugins, and Doubletake, built separately from https://github.com/omarroth/doubletake.
+Example Debian dependencies:
 
-Example Debian packages:
+```bash
+sudo apt update
+sudo apt install -y ffmpeg xvfb pulseaudio-utils gstreamer1.0-tools gstreamer1.0-x \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+  gstreamer1.0-plugins-ugly gstreamer1.0-libav
+```
 
-    sudo apt update
-    sudo apt install -y ffmpeg xvfb pulseaudio-utils gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
+Install Doubletake from https://github.com/omarroth/doubletake and confirm with `doubletake -h`. If using a home directory install, export `PATH="$HOME/.local/bin:$PATH"` before starting the Node backend.
 
-Install Doubletake separately using its upstream build instructions and confirm with 'which doubletake'. This repository does not redistribute Doubletake; respect its license.
+## Run from ChromeOS Linux terminal
 
-## Essential compatibility proof first
+```bash
+git clone --branch codex/chromeos-full-airplay-cast https://github.com/kter1/airplay-audio.git ~/apps/airplay-audio
+cd ~/apps/airplay-audio
+export PATH="$HOME/.local/bin:$PATH"
+node --version       # must be v22+
+npm ci --prefix backend
+npm run backend:start
+```
 
-Before attempting extension casting, verify the original Apple TV accepts the mirroring protocol:
+Do not close the backend terminal. In another terminal run `curl http://127.0.0.1:8090/health` to inspect missing requirements.
 
-    doubletake -target 192.168.1.25 -test -fps 24 -video-codec h264 -hwaccel none
+In ChromeOS Chrome, open `chrome://extensions`, enable Developer mode, click **Load unpacked**, and select the project folder from ChromeOS Files (e.g. copy it to Downloads or enable Linux files access). Click the extension icon, **Open casting controls**. In the new tab supply the Apple TV private IPv4 address, click **Choose screen & cast**, select **Entire screen**, tick **Share audio** if offered, and confirm.
 
-Replace the example IP with your Apple TV IP. Ctrl+C to stop. If the synthetic test image never displays on the television, DO NOT proceed assuming this bridge will solve it. Pairing/password prompts may have to be completed interactively through Doubletake first.
+**Keep the casting controls tab open**, but switch to another tab or application to mirror it. Click Stop or end Chrome screen sharing to end the stream.
 
-## Run
+## Hardware diagnostics
 
-    npm ci --prefix backend
-    npm run backend:start
-    curl http://127.0.0.1:8090/health
+Synthetic direct-to-receiver test:
 
-On ChromeOS Chrome (not Linux Chrome), visit chrome://extensions, enable developer mode and load this repository directory as unpacked extension. It may need to be moved to an accessible ChromeOS Files location. Open the popup, enter Apple TV LAN IP and optional PIN, then choose screen or tab. If Chrome offers a Share audio checkbox, enable it.
+```bash
+doubletake -target YOUR_APPLE_TV_IP -test -fps 24 -video-codec h264 -hwaccel none
+```
 
-Closing the popup should not stop the offscreen recording. Click Stop or end Chrome screen sharing to stop.
+A successful synthetic test proves AirPlay video/audio from Linux but not native ChromeOS capture. The UI status only proves capture or bytes received, **not** verified Apple TV display.
 
-Status 'sender-started-unverified' or 'receiving-media-airplay-unverified' only shows subprocess/transport progress. Neither proves audio or video reached the Apple TV.
-
-## Check
-
-    npm run backend:test
-    npm run ci:verify
-    curl http://127.0.0.1:8090/mirror/status
+```bash
+curl -s http://127.0.0.1:8090/health
+curl -s http://127.0.0.1:8090/mirror/status
+npm run backend:test
+npm run ci:verify
+```
 
 ## Limitations
 
-- **2010 Apple TV 2nd generation support remains unverified.**
-- ChromeOS screen audio support and extension offscreen capture compatibility vary by version and selection.
-- Full desktop/system audio may be unavailable; the extension attempts video-only fallback.
-- The Linux container must have network reachability to the Apple TV, GStreamer X11 capture support, and a working PulseAudio server.
-- Doubletake may require interactive pairing. Pair separately in its own terminal before using the backend if necessary.
-- The Xvfb plus ffplay re-encode architecture may overwhelm a 4 GB Chromebook. No performance tests have been run.
-- DRM media is not guaranteed capturable.
-- One stream at a time, trusted local machine only. This is a prototype and is not security audited.
-- Historical broken audio-only HLS code remains in backend/src/server.js for reference; npm --prefix backend run legacy starts it.
+This **does not yet establish** full Chromebook screen mirroring. ChromeOS may not expose system audio for all surfaces. The double decode/re-encode bridge is CPU-intensive for a 4 GB Chromebook, and pairing, sync, and FPS still require live testing. Keep the extension control tab open. The Node backend stays bound to loopback and accepts only a single stream. Protected content might not be capturable. Use on a trusted machine/network only.
 
-A successful end-to-end receiver run, sustained for 30 minutes with synchronized A/V and with popup closed, is still required before calling the project complete.
+Older audio-only HLS code remains in `backend/src/server.js` for reference. The historical dependency lockfile may fail `npm audit`; remediate vulnerabilities before treating the prototype as production-ready.
