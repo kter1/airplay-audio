@@ -1,14 +1,14 @@
 {
   "name": "airplay-audio-backend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Local-only streaming backend for AirPlay Audio prototype",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node src/mirror-server.js",
+    "legacy": "node src/server.js",
     "test": "node --test"
   },
   "dependencies": {
