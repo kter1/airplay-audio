@@ -272,8 +272,9 @@ fastify.get("/hls/:sessionId/:fileName", async (request, reply) => {
   reply.type(hlsContentType(fileName)).send(createReadStream(filePath));
 });
 
-fastify.get("/stream/audio", { websocket: true }, (connection, request) => {
-  const ws = connection.socket;
+fastify.get("/stream/audio", { websocket: true }, (socket, request) => {
+  // @fastify/websocket >= 10 passes the WebSocket directly instead of a { socket } wrapper.
+  const ws = socket.socket ?? socket;
   const { sessionId, sessionToken } = parseWsQuery(request.raw.url);
 
   if (!isLoopbackAddress(request.ip)) {
