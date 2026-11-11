@@ -1,21 +1,18 @@
 {
   "manifest_version": 3,
-  "name": "AirPlay Screen Caster",
-  "version": "2.1.0",
-  "description": "Streams browser tab audio to a hardened local backend for LAN playback experiments.",
+  "name": "AirPlay Chromebook Caster",
+  "version": "3.0.1",
+  "description": "Experimental desktop and tab casting from ChromeOS to Apple TV",
   "permissions": [
     "storage",
-    "tabCapture"
+    "desktopCapture"
   ],
   "host_permissions": [
     "http://127.0.0.1:8090/*"
   ],
-  "background": {
-    "service_worker": "background.js"
-  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "AirPlay Screen Caster"
+    "default_title": "Open Chromebook AirPlay Caster"
   },
   "icons": {
     "48": "icon48.png",
